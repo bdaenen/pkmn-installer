@@ -92,8 +92,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 The `release` build type enables R8 code shrinking (`isMinifyEnabled`) and
 resource shrinking (`isShrinkResources`), and is signed with a keystore you
 provide. Signing is read from a **git-ignored** `keystore.properties` at the
-project root, so no secrets live in version control. Without that file the
-release build still compiles, but produces an unsigned APK.
+project root, so no secrets live in version control. The same values can be
+supplied through the `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`,
+`RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` environment variables (used by
+CI), which take precedence over the file. Without either source the release
+build still compiles, but produces an unsigned APK.
 
 1. Create a keystore (once, and keep it safe — losing it means you can never
    update the app under the same identity). Since there is no local JDK, run
@@ -154,10 +157,42 @@ Notes:
   the Shizuku bind and the install flow after changing those rules.
 - Bump `versionCode`/`versionName` in `app/build.gradle.kts` for each release.
 
+### Release via GitHub Actions
+
+Pushing a version tag (e.g. `v0.1.0`) triggers
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the
+unit tests, builds a **signed** release APK, uploads it as a workflow artifact,
+and attaches it to a GitHub release. No keystore or password is stored in the
+repository — the signing values are injected from repository secrets, which take
+precedence over any local `keystore.properties`.
+
+Configure these **repository secrets** (Settings → Secrets and variables →
+Actions):
+
+| Secret | Description |
+| --- | --- |
+| `RELEASE_KEYSTORE_BASE64` | The `release.keystore` file, base64-encoded |
+| `RELEASE_STORE_PASSWORD` | Keystore password |
+| `RELEASE_KEY_ALIAS` | Key alias (e.g. `pkmn`) |
+| `RELEASE_KEY_PASSWORD` | Key password |
+
+Encode the keystore (macOS):
+
+```bash
+base64 -i release.keystore | pbcopy   # paste into RELEASE_KEYSTORE_BASE64
+```
+
+Then cut a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## Project layout
 
 ```
-app/src/main/java/com/bennod/pkmninstaller/
+app/src/main/java/be/benn0/pkmninstaller/
   MainActivity.kt              # Compose UI (device info, Shizuku, APKM, install)
   MainViewModel.kt             # Shizuku state + APKM parsing + install state
   apkm/

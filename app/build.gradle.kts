@@ -7,18 +7,32 @@ plugins {
 }
 
 // Release signing is read from a git-ignored keystore.properties so no secrets
-// live in version control. Without that file the release build stays unsigned.
+// live in version control. In CI the same values are supplied through
+// environment variables (see .github/workflows/release.yml), which take
+// precedence. Without either source the release build stays unsigned.
 val keystoreProps = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+mapOf(
+    "storeFile" to "RELEASE_STORE_FILE",
+    "storePassword" to "RELEASE_STORE_PASSWORD",
+    "keyAlias" to "RELEASE_KEY_ALIAS",
+    "keyPassword" to "RELEASE_KEY_PASSWORD",
+).forEach { (property, env) ->
+    System.getenv(env)?.takeIf { it.isNotBlank() }?.let { keystoreProps.setProperty(property, it) }
+}
+
+val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .all { !keystoreProps.getProperty(it).isNullOrBlank() }
+
 android {
-    namespace = "com.bennod.pkmninstaller"
+    namespace = "be.benn0.pkmninstaller"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.bennod.pkmninstaller"
+        applicationId = "be.benn0.pkmninstaller"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -29,7 +43,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystoreProps.isNotEmpty()) {
+            if (hasReleaseSigning) {
                 storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
@@ -42,7 +56,7 @@ android {
         release {
             // Only attach the signing config when a keystore is configured;
             // otherwise the release build stays unsigned instead of failing.
-            if (keystoreProps.isNotEmpty()) {
+            if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
