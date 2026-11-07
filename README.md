@@ -136,20 +136,20 @@ unsigned APK.
    interactively instead, add `-it` to the `podman run` flags so stdin is
    attached and drop the `-storepass`/`-keypass` options.
 
-2. Provide the passwords. The tracked `keystore.properties` already points at
-   `release.keystore` with alias `pkmn` and reads the passwords from the
+2. Provide the password. The tracked `keystore.properties` already points at
+   `release.keystore` with alias `pkmn` and reads the password from the
    environment:
 
    ```properties
    storeFile=release.keystore
-   storePassword=${RELEASE_STORE_PASSWORD}
+   storePassword=${RELEASE_KEYSTORE_PASSWORD}
    keyAlias=pkmn
-   keyPassword=${RELEASE_KEY_PASSWORD}
+   keyPassword=${RELEASE_KEYSTORE_PASSWORD}
    ```
 
-   Either export those two variables, or create a git-ignored
-   `keystore.properties.local` next to it with the real values. Anything in the
-   local file overrides the tracked one, so you can keep the passwords out of
+   Either export that one variable, or create a git-ignored
+   `keystore.properties.local` next to it with the real value. Anything in the
+   local file overrides the tracked one, so you can keep the password out of
    your shell history:
 
    ```properties
@@ -180,8 +180,8 @@ Pushing a version tag (e.g. `v0.1.0`) triggers
 unit tests, builds a signed release APK, uploads it as a workflow artifact, and
 attaches it to a GitHub release as `pkmn-installer.apk`. No keystore or password
 is stored in the repository; the tracked `keystore.properties` reads the
-passwords from the environment, and the workflow fills them in from repository
-secrets.
+password from the environment, and the workflow fills it in from a repository
+secret.
 
 Configure these repository secrets (Settings → Secrets and variables →
 Actions):
@@ -189,8 +189,7 @@ Actions):
 | Secret | Description |
 | --- | --- |
 | `RELEASE_KEYSTORE_BASE64` | The `release.keystore` file, base64-encoded |
-| `RELEASE_STORE_PASSWORD` | Keystore password |
-| `RELEASE_KEY_PASSWORD` | Key password |
+| `RELEASE_KEYSTORE_PASSWORD` | Keystore password (also used as the key password) |
 
 Encode the keystore (macOS):
 
