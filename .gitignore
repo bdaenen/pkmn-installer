@@ -10,7 +10,7 @@
 local.properties
 .junie
 .kotlin
-keystore.properties
+keystore.properties.local
 release.keystore
 *.jks
 *.keystore

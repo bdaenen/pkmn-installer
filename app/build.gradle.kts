@@ -6,26 +6,27 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Release signing is read from a git-ignored keystore.properties so no secrets
-// live in version control. In CI the same values are supplied through
-// environment variables (see .github/workflows/release.yml), which take
-// precedence. Without either source the release build stays unsigned.
+// Release signing is configured in a tracked keystore.properties that holds no
+// secrets: values written as ${NAME} are resolved from the environment at build
+// time, so CI injects them from repository secrets. A git-ignored
+// keystore.properties.local can override individual values for local builds.
+// Without a complete set of values the release build stays unsigned.
 val keystoreProps = Properties().apply {
-    val file = rootProject.file("keystore.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
+    listOf("keystore.properties", "keystore.properties.local").forEach { name ->
+        rootProject.file(name).takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
 }
 
-mapOf(
-    "storeFile" to "RELEASE_STORE_FILE",
-    "storePassword" to "RELEASE_STORE_PASSWORD",
-    "keyAlias" to "RELEASE_KEY_ALIAS",
-    "keyPassword" to "RELEASE_KEY_PASSWORD",
-).forEach { (property, env) ->
-    System.getenv(env)?.takeIf { it.isNotBlank() }?.let { keystoreProps.setProperty(property, it) }
+val envPlaceholder = Regex("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}")
+
+val signingValues = keystoreProps.stringPropertyNames().associateWith { key ->
+    envPlaceholder.replace(keystoreProps.getProperty(key)) { match ->
+        System.getenv(match.groupValues[1]).orEmpty()
+    }
 }
 
 val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
-    .all { !keystoreProps.getProperty(it).isNullOrBlank() }
+    .all { !signingValues[it].isNullOrBlank() }
 
 android {
     namespace = "be.benn0.pkmninstaller"
@@ -44,10 +45,10 @@ android {
     signingConfigs {
         create("release") {
             if (hasReleaseSigning) {
-                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
+                storeFile = rootProject.file(signingValues.getValue("storeFile"))
+                storePassword = signingValues.getValue("storePassword")
+                keyAlias = signingValues.getValue("keyAlias")
+                keyPassword = signingValues.getValue("keyPassword")
             }
         }
     }

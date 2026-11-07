@@ -1,67 +1,72 @@
 # PKMN Installer
 
-An Android app that installs `.apkm` bundles (APKMirror) and spoofs the installer
-package to `com.android.vending` (Play Store), emulating
-`adb install-multiple -i com.android.vending`.
+An Android app that installs Pokémon TCG Pocket on phones where the Play Store
+won't let you, and makes the install look like it came from the Play Store.
 
-See [PLAN.md](PLAN.md) for the full phased development plan.
+> [!NOTE]
+> While the technical solution was hand-designed, 100% of the code was vibecoded. Use at your own risk. The app is open source, so you can read the code and see what it does.
 
-## Status
 
-- **Phase 0 — Scaffolding:** done. App builds and shows a device-info screen.
-- **Phase 1 — APKM parser:** done. Parses `info.json` and each APK's split name
-  from its binary `AndroidManifest.xml`; covered by unit tests.
-- **Phase 2 — Shizuku integration:** done. Detects Shizuku state, requests
-  permission, and runs shell commands as `shell` through a Shizuku **UserService**
-  (the future-proof replacement for the deprecated `Shizuku.newProcess`). The UI
-  also lets you pick an `.apkm` and shows the parsed metadata.
-- **Phase 3 — Install engine:** done. Installs a parsed `.apkm` as a multi-APK
-  session (`pm install-create` / `install-write` / `install-commit`) through the
-  Shizuku UserService, spoofing the installer package to `com.android.vending`.
-  APK bytes are streamed from the bundle into `pm install-write`'s stdin via a
-  pipe (no full-file buffering). The UI shows progress and reads the installer
-  package back to confirm the spoof.
-- **Phase 4 — UI/UX:** done. The install is owned by a process-wide
-  `InstallManager` and kept alive by a foreground `InstallService` (with a
-  progress notification), so it survives backgrounding and UI recreation. The UI
-  shows a real progress bar, pre-flight checks (storage / ABI / min-API) that
-  block the install button, and friendly error messages for common `pm`
-  failures.
-- **Phase 5 — Verification & hardening:** done. The installer package is read
-  back **in-app** via `PackageManager.getInstallSourceInfo` (not `dumpsys`), the
-  UI warns about installed-version mismatches and offers an opt-in downgrade
-  (`-d`), and a stale `pm` session left by a crash is abandoned on next launch.
-  The Android 14+ originating-package limitation is documented in the UI.
-- Phase 6: not started.
+## Why this exists
 
-## Theming
+Pokémon TCG Pocket is only officially available in a handful of countries.
+Players elsewhere have been playing it anyway by downloading the game from
+APKMirror and installing it by hand.
 
-The UI uses a Pokémon-themed Material 3 colour scheme (`ui/theme/`) that follows
-the **system light/dark setting** (`isSystemInDarkTheme()`), with matching
-`values-night` resources for the window background and status bar. Technical
-details (uid, split names, installer read-back, device info) are tucked behind a
-collapsible "Show technical details" section so the default view stays
-user-friendly.
+That stopped working when the game added a Play Store integrity check. The game now looks
+at which app installed it, and if the answer isn't the Play Store, it refuses to
+start. Players in unsupported regions were locked out, even though the game
+itself runs perfectly well on their phones.
 
-## Android 14+ caveat
+This app is a workaround for that. You download the game's `.apkm` file from
+APKMirror yourself, pick it in the app, and the app installs it while telling
+Android that the Play Store was the one doing the installing. The game sees what
+it expects and starts normally.
 
-The shell user can set the **installer package** (`-i com.android.vending`, what
-`getInstallSourceInfo().getInstallingPackageName()` returns) on all supported
-versions. On **Android 14+** it can no longer set the **originating package**
-(`getOriginatingPackageName()`), so that field stays `null` there even when the
-spoof worked. The app only promises the installer field.
+It is a workaround, not a fix. It doesn't change the game or your account, and
+it doesn't make the game officially available in your region. It only makes the
+install look like it came from the Play Store.
 
-## Build environment
+In order to do this, the app needs [Shizuku](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api&hl=en). Shizuku is an app which allows other apps to run ADB debug commands right on your phone. It has strong security guardrails, and you have to explicitly grant permission for each app that needs to use it.
+
+## What it does
+
+- Reads the `.apkm` file you picked and works out which pieces it contains.
+- Checks your phone first: enough free space, a supported processor, a recent
+  enough version of Android.
+- Installs the game in the background, and keeps going if
+  you leave the app.
+- Records the Play Store as the installer, which is what the game's check looks
+  at.
+- Reads that record back afterwards to confirm it worked.
+- Warns you if a different version of the game is already installed, and lets
+  you install an older one on purpose if you want to.
+- Turns confusing system errors into plain sentences.
+
+## What you need
+
+- An Android phone running Android 8.0 or newer.
+- [Shizuku](https://shizuku.rikka.app/) installed and running. Shizuku is a free
+  app that lets other apps use adb debug commands directly from your phone.
+- The game's `.apkm` file, downloaded from APKMirror.
+
+## A caveat on Android 14 and newer
+
+On Android 14 and newer, Android no longer lets adb record the
+"original" source of an app, only the installer. The app only rewrites the
+installer field, which is the one the game seems to check.
+
+## Building it yourself
 
 Google does not publish Linux/arm64 Android SDK build tools, so the build runs
-inside a **linux/amd64** container (emulated on Apple Silicon). The image is
+inside a linux/amd64 container (emulated on Apple Silicon). The image is
 based on `thyrlian/android-sdk` and adds `platforms;android-35` and
 `build-tools;35.0.0`.
 
 ### Prerequisites
 
-- `podman` with a running machine (recommend ≥ 8 GB RAM for Gradle).
-- No local JDK or Android SDK needed — everything is in the container.
+- `podman` with a running machine (8 GB RAM or more recommended for Gradle). You can probably also use docker, if you alias it to `podman` and make some minor changes.
+- No local JDK or Android SDK needed; everything is in the container.
 
 ### Build & test
 
@@ -91,18 +96,17 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 The `release` build type enables R8 code shrinking (`isMinifyEnabled`) and
 resource shrinking (`isShrinkResources`), and is signed with a keystore you
-provide. Signing is read from a **git-ignored** `keystore.properties` at the
-project root, so no secrets live in version control. The same values can be
-supplied through the `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`,
-`RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` environment variables (used by
-CI), which take precedence over the file. Without either source the release
-build still compiles, but produces an unsigned APK.
+provide. Signing is configured in `keystore.properties` at the project root,
+which is tracked in git and contains no secrets: any value written as `${NAME}`
+is replaced with the environment variable `NAME` at build time. Without a
+complete set of values the release build still compiles, but produces an
+unsigned APK.
 
-1. Create a keystore (once, and keep it safe — losing it means you can never
+1. Create a keystore (once, and keep it safe; losing it means you can never
    update the app under the same identity). Since there is no local JDK, run
    `keytool` inside the build container.
 
-   To keep the password **out of the command line** (and out of your shell
+   To keep the password out of the command line (and out of your shell
    history), put it in a temporary file and point `keytool` at it with the
    `-storepass:file` / `-keypass:file` modifiers. A plain `podman run` does not
    attach stdin, so the password must be supplied this way (or via `-it` to be
@@ -128,17 +132,29 @@ build still compiles, but produces an unsigned APK.
    rm -f "$HOME/keystore.pw"
    ```
 
-   Use the same password in `keystore.properties` below. If you prefer to be
-   prompted interactively instead, add `-it` to the `podman run` flags so stdin
-   is attached and drop the `-storepass`/`-keypass` options.
+   Use the same password in the next step. If you prefer to be prompted
+   interactively instead, add `-it` to the `podman run` flags so stdin is
+   attached and drop the `-storepass`/`-keypass` options.
 
-2. Create `keystore.properties` at the project root (git-ignored):
+2. Provide the passwords. The tracked `keystore.properties` already points at
+   `release.keystore` with alias `pkmn` and reads the passwords from the
+   environment:
 
    ```properties
    storeFile=release.keystore
-   storePassword=…
+   storePassword=${RELEASE_STORE_PASSWORD}
    keyAlias=pkmn
-   keyPassword=…
+   keyPassword=${RELEASE_KEY_PASSWORD}
+   ```
+
+   Either export those two variables, or create a git-ignored
+   `keystore.properties.local` next to it with the real values. Anything in the
+   local file overrides the tracked one, so you can keep the passwords out of
+   your shell history:
+
+   ```properties
+   storePassword=...
+   keyPassword=...
    ```
 
 3. Build and install:
@@ -161,19 +177,19 @@ Notes:
 
 Pushing a version tag (e.g. `v0.1.0`) triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the
-unit tests, builds a **signed** release APK, uploads it as a workflow artifact,
-and attaches it to a GitHub release. No keystore or password is stored in the
-repository — the signing values are injected from repository secrets, which take
-precedence over any local `keystore.properties`.
+unit tests, builds a signed release APK, uploads it as a workflow artifact, and
+attaches it to a GitHub release as `pkmn-installer.apk`. No keystore or password
+is stored in the repository; the tracked `keystore.properties` reads the
+passwords from the environment, and the workflow fills them in from repository
+secrets.
 
-Configure these **repository secrets** (Settings → Secrets and variables →
+Configure these repository secrets (Settings → Secrets and variables →
 Actions):
 
 | Secret | Description |
 | --- | --- |
 | `RELEASE_KEYSTORE_BASE64` | The `release.keystore` file, base64-encoded |
 | `RELEASE_STORE_PASSWORD` | Keystore password |
-| `RELEASE_KEY_ALIAS` | Key alias (e.g. `pkmn`) |
 | `RELEASE_KEY_PASSWORD` | Key password |
 
 Encode the keystore (macOS):
@@ -187,40 +203,4 @@ Then cut a release:
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
-```
-
-## Project layout
-
-```
-app/src/main/java/be/benn0/pkmninstaller/
-  MainActivity.kt              # Compose UI (device info, Shizuku, APKM, install)
-  MainViewModel.kt             # Shizuku state + APKM parsing + install state
-  apkm/
-    ApkmModels.kt              # data model (ApkmInfo, ApkEntry, ApkmBundle)
-    ApkmParser.kt              # reads info.json + enumerates APKs
-    BinaryXml.kt               # minimal binary AndroidManifest.xml parser
-    ZipSource.kt               # ZIP abstraction (file / seekable channel)
-    ChannelZipSource.kt        # ZIP reader over a SAF file descriptor
-  install/
-    InstallEngine.kt           # pm install-create/write/commit sequence
-    InstallManager.kt          # process-wide install owner (survives UI)
-    InstallService.kt          # foreground service + progress notification
-    InstallState.kt            # install state model
-    InstallErrors.kt           # maps pm failures to friendly messages
-    InstallerVerifier.kt       # reads install source via getInstallSourceInfo
-    InstallSessionStore.kt     # persists the session id for crash cleanup
-    Preflight.kt               # pure pre-flight checks (version/downgrade)
-    PmOutput.kt                # parses Success/Failure output (unit-tested)
-  shizuku/
-    ShizukuManager.kt          # Shizuku state + permission handling
-    UserService.kt             # runs commands + install steps as shell/root
-    UserServiceClient.kt       # binds to the user service
-    ShellRunner.kt             # thin exec wrapper over the user service
-  util/
-    Bytes.kt                   # human-readable byte formatting
-  ui/
-    PokeBall.kt                # Compose-drawn Pokéball
-    theme/                     # Pokémon Material 3 theme (light + dark)
-app/src/main/aidl/...          # IUserService.aidl (user-service contract)
-app/src/test/...               # unit tests + binary-manifest fixtures
 ```

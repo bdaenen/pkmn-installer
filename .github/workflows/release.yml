@@ -51,17 +51,14 @@ jobs:
 
       - name: Build release APK
         env:
-          RELEASE_STORE_FILE: release.keystore
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: gradle assembleRelease
 
-      - name: Rename APK with the tag
+      - name: Collect APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk \
-            "dist/pkmn-installer-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk dist/pkmn-installer.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
