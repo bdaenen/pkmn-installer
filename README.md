@@ -4,8 +4,20 @@ An Android app that installs Pokémon TCG Pocket on phones where the Play Store
 won't let you, and makes the install look like it came from the Play Store.
 
 > [!NOTE]
-> While the technical solution was hand-designed, 100% of the code was vibecoded. Use at your own risk. The app is open source, so you can read the code and see what it does.
+> While the technical solution was hand-designed, 100% of the code was vibecoded. **Use at your own risk**. The app is open source, so you can read the code and see what it does.
 
+
+## TLDR guide
+1. [Enable developer mode on your phone](https://developer.android.com/studio/debug/dev-options) and enable wireless debugging.
+2. Install [Shizuku](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api&hl=en). This will allow you to run ADB commands on-device.
+3. Open the Shizuku app, and follow the in-app instructions to set up and pair wireless debugging. You only have to do this once.
+4. Install this app (the APK is attached to the [latest GitHub release](https://github.com/bdaenen/pkmn-installer/releases)).
+5. Open this app and go through the setup to grant it permission to use Shizuku.
+6. Download the Pokémon TCG Pocket `.apkm` file from [APKMirror](https://www.apkmirror.com/apk/the-pokemon-company-international/pokemon-tcg-pocket/).
+7. Select the `.apkm` file you just downloaded and let the app install it.
+8. Done! The game should now start normally.
+
+For updates, you only have to repeat steps 6-7, granted Shizuku is still running. The app will warn you if a different version of the game is already installed, and let you install an older one on purpose if you want to..
 
 ## Why this exists
 
