@@ -9,8 +9,8 @@ won't let you, and makes the install look like it came from the Play Store.
 
 ## Why this exists
 
-Pokémon TCG Pocket is only officially available in a handful of countries.
-Players elsewhere have been playing it anyway by downloading the game from
+Pokémon TCG Pocket is not officially available in a handful of countries due to gambling laws or censorship.
+Players in unsupported countries have been playing it anyway by downloading the game from sites like
 APKMirror and installing it by hand.
 
 That stopped working when the game added a Play Store integrity check. The game now looks
